@@ -1,42 +1,18 @@
 #include "../headers/app.hpp"
+#include "../headers/helper_fns.hpp"
 #include "../headers/parsers.hpp"
+#include "../headers/search_fns.hpp"
+#include <cerrno>
+#include <cstdio>
 #include <filesystem>
 #include <print>
 #include <string>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
-void print_app(App *app) {
-  std::println("Flags: {} {}", app->flags.r_flag, app->flags.i_flag);
-  std::println("Search path: {}", app->search_path);
-  std::println("File count: {}", app->files.size());
-
-  std::print("\nFiles:");
-  for (const auto &file : app->files)
-    std::print(" {}", file);
-  std::print("\n");
-}
-
-void read_dir(App *app, std::vector<std::filesystem::directory_entry> *dirs) {
-  pid_t pid = getpid();
-  auto dir = std::move(dirs->back());
-  dirs->pop_back();
-
-  for (const auto &entry : std::filesystem::directory_iterator(dir)) {
-    std::string file_name = entry.path().filename().string();
-
-    if (entry.is_directory() && app->flags.r_flag) {
-      dirs->push_back(entry);
-    }
-
-    if (!entry.is_directory()) {
-      auto it = std::find(app->files.begin(), app->files.end(), file_name);
-      if (it != app->files.end())
-        std::println("{}: {}: {}/{}", pid, *it, dir.path().string(), *it);
-    }
-  }
-}
+namespace fs = std::filesystem;
 
 int main(int argc, char *argv[]) {
   App app = {.flags =
@@ -47,6 +23,8 @@ int main(int argc, char *argv[]) {
              .search_path = std::string(),
              .files = std::vector<std::string>()};
 
+  // NOTE: if theres less than three args (aka no program, searchpath, filename)
+  // just return
   if (argc < 3) {
     std::println(
         "myfind [-R] [-i] searchpath filename1 [filename2] [filenameN]");
@@ -56,19 +34,62 @@ int main(int argc, char *argv[]) {
   parse_flags(argc, argv, &app);
   parse_parameters(argc, argv, &app);
 
-  // TODO: handle error_code
-  if (!std::filesystem::is_directory(app.search_path)) {
-    std::println("Invalid path: {}", app.search_path);
+  // NOTE: Checking if the given starting dir is a valid dir
+  if (!check_dir(app.search_path)) {
     return -1;
   }
 
-  std::vector<std::filesystem::directory_entry> dirs;
-  dirs.push_back(std::filesystem::directory_entry(app.search_path));
+  std::vector<fs::directory_entry> dirs;
+  dirs.push_back(fs::directory_entry(app.search_path));
 
-  // TODO: Check if dir is valid
+  // NOTE: Recursivly searching for dirs
   if (app.flags.r_flag) {
-    while (!dirs.empty()) {
-      read_dir(&app, &dirs);
+    search_for_dirs(app.search_path, dirs);
+  }
+
+  std::vector<pid_t> children;
+
+  // NOTE: Spawning children to search for files
+  for (const std::string &file : app.files) {
+    const pid_t pid = fork();
+
+    if (pid == -1) {
+      std::perror("fork");
+
+      // NOTE: Failed to fork; waiting for children to finish
+      for (const pid_t child_pid : children) {
+        int status;
+
+        while (waitpid(child_pid, &status, 0) == -1) {
+          if (errno != EINTR) {
+            break;
+          }
+        }
+      }
+    }
+
+    if (pid == 0) {
+      search_dir_for_file(file, dirs, app.flags.i_flag);
+
+      _exit(0);
+    }
+
+    children.push_back(pid);
+  }
+
+  for (const pid_t child_pid : children) {
+    int status = 0;
+    pid_t result = 0;
+
+    // NOTE: Waiting for the child to exit
+    do {
+      result = waitpid(child_pid, &status, 0);
+    } while (result == -1 && errno == EINTR);
+
+    // NOTE: Checking if waitpid failed for a reason other than EINTR
+    if (result == -1) {
+      std::perror("waitpid");
+      continue;
     }
   }
 
