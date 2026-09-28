@@ -59,7 +59,8 @@ void search_dir_for_file(std::string file,
 
 void search_for_dirs(const std::string &root,
                      std::vector<fs::directory_entry> &dirs) {
-  for (const auto &entry : fs::recursive_directory_iterator(root)) {
+  for (const auto &entry : fs::recursive_directory_iterator(
+           root, fs::directory_options::skip_permission_denied)) {
     if (entry.is_directory()) {
       dirs.push_back(entry);
     }
