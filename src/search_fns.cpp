@@ -1,8 +1,6 @@
 #include "../headers/search_fns.hpp"
 #include "../headers/helper_fns.hpp"
-#include "../headers/stdout_lock.hpp"
 #include <filesystem>
-#include <mutex>
 #include <optional>
 #include <print>
 #include <string>
@@ -34,7 +32,6 @@ void search_dir_for_file(std::string file,
               return;
             }
 
-            std::scoped_lock lock(stdout_mutex);
             print(pid, file_name, *abs_path);
           }
         } else {
@@ -45,7 +42,6 @@ void search_dir_for_file(std::string file,
           to_lower(file_lowercase);
 
           if (file_name == file_lowercase) {
-            std::scoped_lock lock(stdout_mutex);
             print(pid, file_name, *abs_path);
           }
         }

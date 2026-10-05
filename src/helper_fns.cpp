@@ -1,4 +1,5 @@
 #include "../headers/helper_fns.hpp"
+#include "../headers/stdout_lock.hpp"
 #include <algorithm>
 #include <optional>
 #include <print>
@@ -28,6 +29,7 @@ std::optional<fs::path> get_absolute(const fs::path &path) {
 }
 
 void print(pid_t pid, const std::string &file, const fs::path &abs_path) {
+  std::scoped_lock lock(stdout_mutex);
   std::println("{}: {}: {}", pid, file, abs_path.string());
 }
 
