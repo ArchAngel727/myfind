@@ -51,7 +51,14 @@ void search_dir_for_file(std::string file,
         }
       }
     } catch (const fs::filesystem_error &e) {
-      std::println(stderr, "Cannot read {}: {}", e.path1().string(),
+      auto path = e.path1();
+      auto abs_path = get_absolute(e.path1());
+
+      if (abs_path) {
+        path = abs_path->string();
+      }
+
+      std::println(stderr, "Cannot read {}: {}", path.string(),
                    e.code().message());
     }
   }
