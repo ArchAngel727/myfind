@@ -1,9 +1,10 @@
 #include "../headers/helper_fns.hpp"
-#include "../headers/stdout_lock.hpp"
 #include <algorithm>
 #include <optional>
 #include <print>
+#include <semaphore.h>
 #include <string>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -28,9 +29,36 @@ std::optional<fs::path> get_absolute(const fs::path &path) {
   return abs_path;
 }
 
-void print(pid_t pid, const std::string &file, const fs::path &abs_path) {
-  std::scoped_lock lock(stdout_mutex);
-  std::println("{}: {}: {}", pid, file, abs_path.string());
+void print(SharedSemaphore &output_lock, pid_t pid, const std::string &file,
+           const fs::path &abs_path) {
+  const std::string line =
+      std::format("{}: {}: {}\n", pid, file, abs_path.string());
+
+  while (sem_wait(output_lock.ptr) == -1) {
+    if (errno == EINTR)
+      continue;
+    perror("sem_wait");
+    return;
+  }
+
+  const char *data = line.data();
+  std::size_t remaining = line.size();
+
+  while (remaining > 0) {
+    const ssize_t n = write(STDOUT_FILENO, data, remaining);
+    if (n == -1 && errno == EINTR)
+      continue;
+    if (n <= 0) {
+      perror("write");
+      break;
+    }
+    data += n;
+    remaining -= static_cast<std::size_t>(n);
+  }
+
+  if (sem_post(output_lock.ptr) == -1) {
+    perror("sem_post");
+  }
 }
 
 bool check_dir(const std::string &search_path) {

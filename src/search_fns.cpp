@@ -11,7 +11,7 @@
 
 void search_dir_for_file(std::string file,
                          std::vector<fs::directory_entry> &dirs,
-                         bool case_sensitive) {
+                         bool case_sensitive, SharedSemaphore &output_lock) {
   pid_t pid = getpid();
 
   for (const auto &dir : dirs) {
@@ -32,7 +32,7 @@ void search_dir_for_file(std::string file,
               return;
             }
 
-            print(pid, file_name, *abs_path);
+            print(output_lock, pid, file_name, *abs_path);
           }
         } else {
           std::string file_lowercase = file;
@@ -42,7 +42,7 @@ void search_dir_for_file(std::string file,
           to_lower(file_lowercase);
 
           if (file_name == file_lowercase) {
-            print(pid, file_name, *abs_path);
+            print(output_lock, pid, file_name, *abs_path);
           }
         }
       }

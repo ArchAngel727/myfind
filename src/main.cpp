@@ -2,11 +2,14 @@
 #include "../headers/helper_fns.hpp"
 #include "../headers/parsers.hpp"
 #include "../headers/search_fns.hpp"
+#include "../headers/shared_semaphore.hpp"
 #include <cerrno>
 #include <cstdio>
 #include <filesystem>
 #include <print>
+#include <semaphore.h>
 #include <string>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -36,7 +39,7 @@ int main(int argc, char *argv[]) {
 
   // NOTE: Checking if the given starting dir is a valid dir
   if (!check_dir(app.search_path)) {
-    return -1;
+    return 1;
   }
 
   std::vector<fs::directory_entry> dirs;
@@ -45,6 +48,13 @@ int main(int argc, char *argv[]) {
   // NOTE: Recursivly searching for dirs
   if (app.flags.r_flag) {
     search_for_dirs(app.search_path, dirs);
+  }
+
+  // NOTE: Create write lock for shared memory region
+  SharedSemaphore output_lock;
+
+  if (output_lock.ptr == nullptr) {
+    return 1;
   }
 
   std::vector<pid_t> children;
@@ -69,7 +79,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (pid == 0) {
-      search_dir_for_file(file, dirs, app.flags.i_flag);
+      search_dir_for_file(file, dirs, app.flags.i_flag, output_lock);
 
       _exit(0);
     }
