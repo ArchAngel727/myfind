@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::vector<pid_t> children;
+  bool fork_failed = false;
 
   // NOTE: Spawning children to search for files
   for (const std::string &file : app.files) {
@@ -65,17 +66,8 @@ int main(int argc, char *argv[]) {
 
     if (pid == -1) {
       std::perror("fork");
-
-      // NOTE: Failed to fork; waiting for children to finish
-      for (const pid_t child_pid : children) {
-        int status;
-
-        while (waitpid(child_pid, &status, 0) == -1) {
-          if (errno != EINTR) {
-            break;
-          }
-        }
-      }
+      fork_failed = true;
+      break;
     }
 
     if (pid == 0) {
@@ -101,6 +93,10 @@ int main(int argc, char *argv[]) {
       std::perror("waitpid");
       continue;
     }
+  }
+
+  if (fork_failed) {
+    return 1;
   }
 
   return 0;
