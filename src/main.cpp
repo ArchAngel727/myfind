@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (pid == 0) {
-      search_dir_for_file(file, dirs, app.flags.i_flag, output_lock);
+      search_dir_for_file(file, dirs, !app.flags.i_flag, output_lock);
 
       _exit(0);
     }
